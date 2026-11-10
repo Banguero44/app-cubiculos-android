@@ -5,17 +5,26 @@ import android.app.TimePickerDialog
 import android.os.Bundle
 import androidx.appcompat.app.AppCompatActivity
 import com.example.reservacubiculos.databinding.ActivityFormularioBinding
+import androidx.appcompat.app.AlertDialog
+import androidx.lifecycle.lifecycleScope
+import com.example.reservacubiculos.model.ReservaRequest
+import com.example.reservacubiculos.network.RetrofitClient
+import com.example.reservacubiculos.network.mensajeDeError
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.launch
+import java.io.IOException
 import java.util.Locale
 
-// Pantalla 4 - Formulario para crear o editar una reserva
-// (Sprint 1: solo válida y muestra el formulario; guardar en la API lo realizaré en el Sprint 2)
+// Pantalla 4 - Formulario para crear o editar una reserva (HU-05, HU-06, HU-07, HU-09)
 class FormularioReservaActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityFormularioBinding
+    private lateinit var cubiculoId: String
     private var reservaId: String? = null // null = crear, con valor = editar
     private var fecha: String? = null
     private var horaInicio: String? = null
     private var horaFin: String? = null
+    private var textoBoton = "Crear reserva"
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -23,11 +32,18 @@ class FormularioReservaActivity : AppCompatActivity() {
         setContentView(binding.root)
         prepararPantalla(binding.root)
 
+        val idCubiculo = intent.getStringExtra("cubiculo_id")
+        if (idCubiculo == null) {
+            finish()
+            return
+        }
+        cubiculoId = idCubiculo
         reservaId = intent.getStringExtra("reserva_id")
         val editando = reservaId != null
+        textoBoton = if (editando) "Guardar cambios" else "Crear reserva"
 
         binding.barra.tvTitulo.text = if (editando) "Editar reserva" else "Nueva reserva"
-        binding.btnGuardar.text = if (editando) "Guardar cambios" else "Crear reserva"
+        binding.btnGuardar.text = textoBoton
         binding.tvCubiculoNombre.text = intent.getStringExtra("cubiculo_nombre") ?: "Cubículo"
         binding.tvCubiculoDetalle.text = intent.getStringExtra("cubiculo_detalle") ?: ""
 
@@ -54,7 +70,7 @@ class FormularioReservaActivity : AppCompatActivity() {
     }
 
     private fun elegirFecha() {
-        val p = (fecha ?: "2026-11-03").split("-").map { it.toInt() }
+        val p = (fecha ?: "2026-11-10").split("-").map { it.toInt() }
         DatePickerDialog(this, { _, anio, mes, dia ->
             fecha = "%04d-%02d-%02d".format(Locale.US, anio, mes + 1, dia)
             mostrarValores()
@@ -74,12 +90,12 @@ class FormularioReservaActivity : AppCompatActivity() {
     private fun guardar() {
         val nombre = binding.etNombre.text.toString().trim()
         val codigo = binding.etCodigo.text.toString().trim()
+        val f = fecha
         val hi = horaInicio
         val hf = horaFin
 
-        // Validación sencilla en la app, la validación real (incluida la regla de
-        // "no cruzar horarios", que responde 409) la hace el backend.
-        if (nombre.isEmpty() || codigo.isEmpty() || fecha == null || hi == null || hf == null) {
+        // Validación sencilla en la app, la validación real (incluida la regla de "no cruzar horarios") la hace la API y la app solo muestra su respuesta.
+        if (nombre.isEmpty() || codigo.isEmpty() || f == null || hi == null || hf == null) {
             mensaje("Completa todos los campos")
             return
         }
@@ -87,6 +103,52 @@ class FormularioReservaActivity : AppCompatActivity() {
             mensaje("La hora de inicio debe ser menor que la hora de fin")
             return
         }
-        mensaje("Datos válidos. Guardar en la API lo realizare en el Sprint 2.")
+        enviar(ReservaRequest(cubiculoId, nombre, codigo, f, hi, hf))
+    }
+
+    // Crea (POST) o edita (PUT) la reserva en la API
+    private fun enviar(datos: ReservaRequest) {
+        binding.btnGuardar.isEnabled = false
+        binding.btnGuardar.text = "Guardando…"
+        val id = reservaId
+
+        lifecycleScope.launch {
+            try {
+                val respuesta = if (id == null) {
+                    RetrofitClient.api.crearReserva(datos)
+                } else {
+                    RetrofitClient.api.actualizarReserva(id, datos)
+                }
+                if (respuesta.isSuccessful) {
+                    mensaje(if (id == null) "Reserva creada correctamente" else "Cambios guardados correctamente")
+                    finish()
+                } else {
+                    // 400 datos inválidos, 404 no existe, 409 horario ocupado: la API explica al usuario
+                    avisarError(respuesta.code(), mensajeDeError(respuesta.errorBody()?.string(), respuesta.code()))
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: IOException) {
+                avisarError(0, "No hay conexión con el servidor. Revisa tu internet e inténtalo de nuevo.")
+            } catch (e: Exception) {
+                avisarError(0, "Ocurrió un error inesperado.")
+            }
+        }
+    }
+
+    private fun avisarError(codigo: Int, texto: String) {
+        binding.btnGuardar.isEnabled = true
+        binding.btnGuardar.text = textoBoton
+        val titulo = when (codigo) {
+            409 -> "Horario no disponible"
+            400 -> "Revisa los datos"
+            404 -> "No se encontró"
+            else -> "No se pudo guardar"
+        }
+        AlertDialog.Builder(this)
+            .setTitle(titulo)
+            .setMessage(texto)
+            .setPositiveButton("Entendido", null)
+            .show()
     }
 }

@@ -1,7 +1,6 @@
 package com.example.reservacubiculos.model
 
-// Estos modelos usan los mismos nombres de campos que devuelve la API (backend en MongoDB),
-// por eso el identificador se llama _id.
+// Estos modelos usan los mismos nombres de campos que devuelve la API (backend en MongoDB), por eso el identificador se llama _id.
 
 data class Cubiculo(
     val _id: String,

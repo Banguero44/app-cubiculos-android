@@ -15,7 +15,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import java.io.IOException
 
-// Pantalla 1 - Lista de cubículos (HU-01): los datos vienen de la API en la nub
+// Pantalla 1 - Lista de cubículos (HU-01): los datos vienen de la API en la nube
 class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
@@ -38,7 +38,7 @@ class MainActivity : AppCompatActivity() {
         binding.recyclerCubiculos.visibility = View.GONE
         binding.estado.mostrarCargando()
 
-        /* La llamada de red se hace en una corrutina para no bloquear la pantalla */
+        // La llamada de red se hace en una corrutina para no bloquear la pantalla
         lifecycleScope.launch {
             try {
                 val respuesta = RetrofitClient.api.getCubiculos()

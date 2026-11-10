@@ -15,7 +15,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import java.io.IOException
 
-// Pantalla 3 - Detalle de la reserva (HU-03): los datos vienen de la API
+// Pantalla 3 - Detalle de la reserva (HU-03) y cancelar (HU-08) Todo_en_la_Api
 class DetalleReservaActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityDetalleBinding
@@ -81,7 +81,6 @@ class DetalleReservaActivity : AppCompatActivity() {
         binding.tvEstado.text = if (activa) "Activa" else "Cancelada"
         binding.tvEstado.setBackgroundResource(if (activa) R.drawable.bg_chip_activa else R.drawable.bg_chip_cancelada)
         binding.tvEstado.setTextColor(ContextCompat.getColor(this, if (activa) R.color.azul else R.color.rojo))
-
         // Una reserva cancelada ya no se puede editar ni cancelar otra vez (igual que en la API)
         binding.btnEditar.isEnabled = activa
         binding.btnCancelar.isEnabled = activa
@@ -109,9 +108,31 @@ class DetalleReservaActivity : AppCompatActivity() {
             .setTitle("¿Cancelar esta reserva?")
             .setMessage("La reserva quedará en estado Cancelada y el horario volverá a estar libre.")
             .setNegativeButton("Mantener activa", null)
-            .setPositiveButton("Sí, cancelar reserva") { _, _ ->
-                mensaje("Cancelar la reserva se conecta a la API en el Sprint 2.")
-            }
+            .setPositiveButton("Sí, cancelar reserva") { _, _ -> cancelar() }
             .show()
+    }
+
+    // HU-08: La API no borra la reserva, cambia su estado a CANCELADA
+    private fun cancelar() {
+        binding.contenido.visibility = View.GONE
+        binding.estado.mostrarCargando("Cancelando la reserva…")
+
+        lifecycleScope.launch {
+            try {
+                val respuesta = RetrofitClient.api.cancelarReserva(reservaId)
+                if (respuesta.isSuccessful) {
+                    mensaje("Reserva cancelada correctamente")
+                } else {
+                    mensaje(mensajeDeError(respuesta.errorBody()?.string(), respuesta.code()))
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: IOException) {
+                mensaje("No hay conexión con el servidor, inténtalo de nuevo.")
+            } catch (e: Exception) {
+                mensaje("Ocurrió un error inesperado.")
+            }
+            cargarReserva() // vuelve a consultar la API para mostrar el estado
+        }
     }
 }
